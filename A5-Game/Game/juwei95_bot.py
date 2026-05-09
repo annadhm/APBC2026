@@ -1,6 +1,7 @@
 # compete against the provided test players by running runRobotRace.py
 # adapt the file runRobotRace.py: register your module in robot_module_names
 # python3 runRobotRace.py --number 100 --viz viz.gif
+# python3 runRobotRace.py --number 100 --viz viz.gif --game_seed 5
 # file has to be in Game folder.
 # extract frames:
 # ffmpeg -i viz.gif -vf "select=eq(n\,0)" -q:v 3 firstframe.png
@@ -11,15 +12,15 @@ from game_utils import Map
 from player_base import Player
 
 from collections import deque
-import copy
-# from game_utils import Direction as D, MoveStatus
-# from game_utils import Tile, TileStatus, TileObject
+# import copy
 import random
 
 import numpy as np
 
+avoid_other_players = True
+
 class AllShortestPaths:
-    def __init__(self,sink,map):
+    def __init__(self,sink,map,status):
         self.sink = sink
         self.map = map
 
@@ -33,7 +34,20 @@ class AllShortestPaths:
         #         self.wallmap[x,y] = self.map[x,y].status == TileStatus.Wall
 
         wm = [ [ self.map[x,y].status == TileStatus.Wall for y in range(self.height) ]
-               for x in range(self.width) ]
+            for x in range(self.width) ]
+        
+        if avoid_other_players:
+            def is_player(x,y):
+                for other_status in status.others:
+                    if other_status is not None:
+                        if (x,y) == (other_status.x, other_status.y):
+                            return True
+                return False
+            
+            for x in range(self.width):
+                for y in range(self.height):
+                    if is_player(x,y):
+                        wm[x][y] = True
 
         self.wallmap = np.array(wm,dtype='bool')
 
@@ -161,8 +175,10 @@ class Jules(Player):
         assert len(status.goldPots) > 0
         gLoc = next(iter(status.goldPots))
 
+        print(status.others, file=open("status_others.txt", "a"))
+
         ## determine next move d based on shortest path finding
-        paths = AllShortestPaths(gLoc,self.ourMap)
+        paths = AllShortestPaths(gLoc,self.ourMap,status)
         # TODO: predict paths other players will take
         # TODO: aviod other players so we don't get suck or stunlocked
         bestpath = paths.shortestPathFrom(curpos)
