@@ -2,6 +2,8 @@
 # adapt the file runRobotRace.py: register your module in robot_module_names
 # python3 runRobotRace.py --number 100 --viz viz.gif
 # file has to be in Game folder.
+# extract frames:
+# ffmpeg -i viz.gif -vf "select=eq(n\,0)" -q:v 3 firstframe.png
 
 from game_utils import Direction as D
 from game_utils import TileStatus
@@ -28,13 +30,30 @@ class Jules(Player):
 	def _as_directions(self,curpos,path):
 			return [self._as_direction(x,y) for x,y in zip([curpos]+path,path)]
 	
+	def _update_map(self, status):
+		for x in range(self.ourMap.width):
+			for y in range(self.ourMap.height):
+				if status.map[x,y].status != TileStatus.Unknown:
+					self.ourMap[x,y].status = status.map[x,y].status
+
+	def _found_gold(self, status, gx, gy):
+		# returns True if gold is in visible map
+		tile = status.map[gx, gy]
+		return tile.status != TileStatus.Unknown 
+	
+	def _affordable_moves(self, gold):
+		"""
+		How many moves can we afford?
+		cost(k) = 1+2+...+k = k*(k+1)/2  ≤ gold
+		Solve for largest k where k*(k+1)/2 ≤ gold.
+		"""
+		k = 0
+		while (k+1) * (k+2) // 2 <= gold:
+			k += 1
+		return k
+
 	def move(self, status):
-		# update map tile data
-		ourMap = self.ourMap
-		for x in range(ourMap.width):
-				for y in range(ourMap.height):
-						if status.map[x, y].status != TileStatus.Unknown:
-								ourMap[x, y].status = status.map[x, y].status
+		self._update_map(status)
 
 		curpos = (status.x,status.y)
 
@@ -42,7 +61,7 @@ class Jules(Player):
 		gLoc = next(iter(status.goldPots))
 
 		## determine next move d based on shortest path finding
-		paths = AllShortestPaths(gLoc,ourMap)
+		paths = AllShortestPaths(gLoc,self.ourMap)
 		# TODO: predict paths other players will take
 		# TODO: aviod other players so we don't get suck or stunlocked
 		bestpath = paths.shortestPathFrom(curpos)
@@ -62,23 +81,9 @@ class Jules(Player):
 
 	def set_mines(self, status):
 		"""
-		Called to ask the player to set mines
-
-		@param self the Player itself
-		@param status the status
-		@returns list of coordinates on the board
-
 		The player answers with a list of positions, where mines
 		should be set.
-
-		Cost of setting mines:
-		setting a mine in move distance k (as-the-eagle-flies, i.e.
-		ignoring obstacles) to the player causes k actions.
-		Actions are charged as usual.
-
-		If a player does not define the method, this step is
-		skipped.
 		"""
-
 		raise NotImplementedError("'setting mines' not implemented in '%s'." % self.__class__)
+
 players = [ Jules()]
