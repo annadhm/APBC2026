@@ -126,10 +126,10 @@ class AllShortestPaths:
         return path
 
 
-class Jules(Player):
+class D3STROYER(Player):
 
     def reset(self, player_id, max_players, width, height):
-        self.player_name = "Jules"
+        self.player_name = "D3STROYER"
         self.ourMap = Map(width, height)
 
     def round_begin(self, r):
@@ -203,4 +203,4 @@ class Jules(Player):
         """
         raise NotImplementedError("'setting mines' not implemented in '%s'." % self.__class__)
 
-players = [ Jules()]
+players = [ D3STROYER()]
