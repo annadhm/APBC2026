@@ -9,128 +9,7 @@ from game_utils import Direction as D
 from game_utils import TileStatus
 from game_utils import Map
 from player_base import Player
-
-from collections import deque
-# import copy
-import random
-
-import numpy as np
-
-avoid_other_players = False
-
-class AllShortestPaths:
-    def __init__(self,sink,map,status):
-        self.sink = sink
-        self.map = map
-
-        self.width=map.width
-        self.height=map.height
-
-        # self.wallmap = np.zeros((self.height, self.width), dtype='bool')
-
-        # for x in range(self.width):
-        #     for y in range(self.height):
-        #         self.wallmap[x,y] = self.map[x,y].status == TileStatus.Wall
-
-        wm = [ [ self.map[x,y].status == TileStatus.Wall for y in range(self.height) ]
-            for x in range(self.width) ]
-        
-        # file = open("status_others", "a")
-        # print(status.others, file = open("status_others", "a"))
-
-        # for other in status.others:
-        #     if other is not None:
-        #         print(other.player, file = open("status_others", "a"))
-
-
-        if avoid_other_players:
-            def is_player(x,y):
-                for other_status in status.others:
-                    if other_status is not None:
-                        if (x,y) == (other_status.x, other_status.y):
-                            return True
-                return False
-            
-            for x in range(self.width):
-                for y in range(self.height):
-                    if is_player(x,y):
-                        wm[x][y] = True
-
-        self.wallmap = np.array(wm,dtype='bool')
-
-        self.dist = np.negative(np.ones((self.height, self.width), dtype='int'))
-
-        self._calcDistances()
-
-    # return the non-Wall neighbors of a field (x,y)
-    def nonWallNeighborsIter(self,xy):
-
-        (x,y) = xy
-        xs=[x]
-        if x>0: xs.append(x-1)
-        if x<self.width-1: xs.append(x+1)
-
-        ys=[y]
-        if y>0: ys.append(y-1)
-        if y<self.height-1: ys.append(y+1)
-
-        for x in xs:
-            for y in ys:
-                if not self.wallmap[x,y]:
-                    if (x,y)==xy: continue
-                    yield (x,y)
-
-    def _calcDistances(self):
-        front = deque()
-        front.append(self.sink)
-
-        assert type(self.sink) == tuple
-        self.dist[self.sink] = 0
-
-        while front:
-            xy=front.popleft()
-            for neighbor in self.nonWallNeighborsIter(xy):
-                if self.dist[neighbor]<0:
-                    front.append(neighbor)
-                    self.dist[neighbor] = self.dist[xy] + 1
-
-    def shortestPathFrom(self, xy):
-        if self.dist[xy]<0:
-            return []
-
-        path = list()
-        curdist = self.dist[xy]
-
-        while xy != self.sink:
-            path.append(xy)
-
-            # find preceeding neighbor
-            for neighbor in self.nonWallNeighborsIter(xy):
-                if self.dist[neighbor] ==  curdist-1:
-                    curdist -= 1
-                    xy = neighbor
-                    break
-        return path
-
-    def randomShortestPathFrom(self, xy):
-        if self.dist[xy]<0:
-            return []
-
-        path = list()
-        curdist = self.dist[xy]
-
-        while xy != self.sink:
-            path.append(xy)
-
-            potentialNextXYs = list()
-            # find preceeding neighbor
-            for neighbor in self.nonWallNeighborsIter(xy):
-                if self.dist[neighbor] ==  curdist-1:
-                    potentialNextXYs.append(neighbor)
-            assert len(potentialNextXYs)>0
-            xy = random.choice(potentialNextXYs)
-            curdist -= 1
-        return path
+from shortestpaths import AllShortestPaths
 
 
 class D3STROYER(Player):
@@ -185,7 +64,7 @@ class D3STROYER(Player):
         # print(status.others, file=open("status_others.txt", "a"))
 
         ## determine next move d based on shortest path finding
-        paths = AllShortestPaths(gLoc,self.ourMap,status)
+        paths = AllShortestPaths(gLoc,self.ourMap)
 
         # predict paths other players will take
         for other_status in status.others:
@@ -197,7 +76,7 @@ class D3STROYER(Player):
                     self.ourMap[tile].status = TileStatus.Wall
 
         # recompute paths after Map update to avoid other players
-        paths = AllShortestPaths(gLoc,self.ourMap,status)
+        paths = AllShortestPaths(gLoc,self.ourMap)
 
         bestpath = paths.shortestPathFrom(curpos)
 
