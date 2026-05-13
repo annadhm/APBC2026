@@ -16,7 +16,7 @@ import random
 
 import numpy as np
 
-avoid_other_players = True
+avoid_other_players = False
 
 class AllShortestPaths:
     def __init__(self,sink,map,status):
@@ -35,6 +35,14 @@ class AllShortestPaths:
         wm = [ [ self.map[x,y].status == TileStatus.Wall for y in range(self.height) ]
             for x in range(self.width) ]
         
+        # file = open("status_others", "a")
+        # print(status.others, file = open("status_others", "a"))
+
+        # for other in status.others:
+        #     if other is not None:
+        #         print(other.player, file = open("status_others", "a"))
+
+
         if avoid_other_players:
             def is_player(x,y):
                 for other_status in status.others:
@@ -178,8 +186,19 @@ class D3STROYER(Player):
 
         ## determine next move d based on shortest path finding
         paths = AllShortestPaths(gLoc,self.ourMap,status)
-        # TODO: predict paths other players will take
-        # TODO: aviod other players so we don't get suck or stunlocked
+
+        # predict paths other players will take
+        for other_status in status.others:
+            if other_status is not None:
+                other_pos = other_status.x, other_status.y
+                other_path = paths.shortestPathFrom(other_pos)
+                # blacklist first n predicted path tiles
+                for tile in other_path[:3]:
+                    self.ourMap[tile].status = TileStatus.Wall
+
+        # recompute paths after Map update to avoid other players
+        paths = AllShortestPaths(gLoc,self.ourMap,status)
+
         bestpath = paths.shortestPathFrom(curpos)
 
         bestpath = bestpath[1:]
