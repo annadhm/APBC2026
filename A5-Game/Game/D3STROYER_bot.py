@@ -5,6 +5,8 @@
 # extract frames:
 # ffmpeg -i viz.gif -vf "select=eq(n\,0)" -q:v 3 firstframe.png
 
+import math
+
 from game_utils import Direction as D
 from game_utils import TileStatus
 from game_utils import Map
@@ -52,6 +54,10 @@ class D3STROYER(Player):
             k += 1
         return k
 
+    @staticmethod
+    def _movement_cost(distance):
+        return distance * (distance + 1) // 2
+
     def move(self, status):
         self._update_map(status)
 
@@ -70,12 +76,19 @@ class D3STROYER(Player):
         bestpath.append( gLoc )
 
         distance=len(bestpath)
-        # TODO: tweak numMoves based on amount of gold and distance to gold?
+        
+        # try to reach gold in t = log2(distance)
         numMoves = 2
+        move_cost = D3STROYER._movement_cost(distance // 2)
+        if (distance > numMoves and
+            move_cost < status.gold // 4 and
+            move_cost * 2 < status.goldPots[gLoc]):
+            numMoves = distance // 2
+
         # TODO: if low amount of gold in pot don't go for it
         ## don't move if the pot is too far away
-        if numMoves>0 and distance/numMoves > status.goldPotRemainingRounds:
-                numMoves = 0
+        if math.log2(distance) > status.goldPotRemainingRounds:
+            numMoves = 0
 
         return self._as_directions(curpos,bestpath[:numMoves])
 
