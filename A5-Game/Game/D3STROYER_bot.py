@@ -13,6 +13,7 @@ from game_utils import Map
 from player_base import Player
 from shortestpaths import AllShortestPaths
 
+
 class D3STROYER(Player):
 
     def reset(self, player_id, max_players, width, height):
@@ -66,10 +67,23 @@ class D3STROYER(Player):
         assert len(status.goldPots) > 0
         gLoc = next(iter(status.goldPots))
 
+        # print(status.others, file=open("status_others.txt", "a"))
+
         ## determine next move d based on shortest path finding
         paths = AllShortestPaths(gLoc,self.ourMap)
-        # TODO: predict paths other players will take
-        # TODO: aviod other players so we don't get suck or stunlocked
+
+        # predict paths other players will take
+        for other_status in status.others:
+            if other_status is not None:
+                other_pos = other_status.x, other_status.y
+                other_path = paths.shortestPathFrom(other_pos)
+                # blacklist first n predicted path tiles
+                for tile in other_path[:3]:
+                    self.ourMap[tile].status = TileStatus.Wall
+
+        # recompute paths after Map update to avoid other players
+        paths = AllShortestPaths(gLoc,self.ourMap)
+
         bestpath = paths.shortestPathFrom(curpos)
 
         bestpath = bestpath[1:]
