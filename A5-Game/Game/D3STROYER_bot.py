@@ -5,11 +5,14 @@
 # extract frames:
 # ffmpeg -i viz.gif -vf "select=eq(n\,0)" -q:v 3 firstframe.png
 
+import math
+
 from game_utils import Direction as D
 from game_utils import TileStatus
 from game_utils import Map
 from player_base import Player
 from shortestpaths import AllShortestPaths
+
 
 class D3STROYER(Player):
 
@@ -52,6 +55,10 @@ class D3STROYER(Player):
             k += 1
         return k
 
+    @staticmethod
+    def _movement_cost(distance):
+        return distance * (distance + 1) // 2
+
     def move(self, status):
         self._update_map(status)
 
@@ -60,22 +67,42 @@ class D3STROYER(Player):
         assert len(status.goldPots) > 0
         gLoc = next(iter(status.goldPots))
 
+        # print(status.others, file=open("status_others.txt", "a"))
+
         ## determine next move d based on shortest path finding
         paths = AllShortestPaths(gLoc,self.ourMap)
-        # TODO: predict paths other players will take
-        # TODO: aviod other players so we don't get suck or stunlocked
+
+        # predict paths other players will take
+        for other_status in status.others:
+            if other_status is not None:
+                other_pos = other_status.x, other_status.y
+                other_path = paths.shortestPathFrom(other_pos)
+                # blacklist first n predicted path tiles
+                for tile in other_path[:3]:
+                    self.ourMap[tile].status = TileStatus.Wall
+
+        # recompute paths after Map update to avoid other players
+        paths = AllShortestPaths(gLoc,self.ourMap)
+
         bestpath = paths.shortestPathFrom(curpos)
 
         bestpath = bestpath[1:]
         bestpath.append( gLoc )
 
         distance=len(bestpath)
-        # TODO: tweak numMoves based on amount of gold and distance to gold?
+        
+        # try to reach gold in t = log2(distance)
         numMoves = 2
+        move_cost = D3STROYER._movement_cost(distance // 2)
+        if (distance > numMoves and
+            move_cost < status.gold // 4 and
+            move_cost * 2 < status.goldPots[gLoc]):
+            numMoves = distance // 2
+
         # TODO: if low amount of gold in pot don't go for it
         ## don't move if the pot is too far away
-        if numMoves>0 and distance/numMoves > status.goldPotRemainingRounds:
-                numMoves = 0
+        if math.log2(distance) > status.goldPotRemainingRounds:
+            numMoves = 0
 
         return self._as_directions(curpos,bestpath[:numMoves])
 
