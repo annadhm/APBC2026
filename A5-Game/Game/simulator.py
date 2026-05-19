@@ -14,9 +14,10 @@ from game_utils import Tile, TileStatus, TileObject
 from game_utils import Map, Status, GameParameters
 
 from illustrator import Illustrator
+from pov_illustrator import PovIllustrator
 
 class Simulator(object):
-	def __init__(self, *, map, seed=None, vizfile=None, framerate):
+	def __init__(self, *, map, seed=None, vizfile=None, framerate, pov=False):
 		self.rng = random.Random()
 		if seed is None:
 			seed = random.randrange(sys.maxsize)
@@ -53,7 +54,7 @@ class Simulator(object):
 		self._status = status = []
 		# the object we give the player each time, updated from the internal data
 		self._pubStat = pubStat = []  
-
+		self.pov = pov
 		self.illustrator = Illustrator(self.map, vizfile, framerate)
 
 	def _random_empty_spot(self):
@@ -79,7 +80,9 @@ class Simulator(object):
 
 		# duplicate the public status object in the player object
 		p.status = self._pubStat[-1]
-
+  
+	
+  
 	def play(self, *, rounds, mine_mode, jumps_allowed=False):
 		rounds = int(rounds)
 		self.mine_mode = mine_mode
@@ -92,10 +95,13 @@ class Simulator(object):
 			self._pubStat[pId].params.jumps_ok=jumps_allowed
 
 			self._players[pId].reset(pId, len(self._players), self.map.width, self.map.height)
-
+		
 		self.illustrator._add_robots(self._players)
 		self.illustrator._add_nrounds(rounds)
-
+  
+		self.pov_histories = {}
+		self._init_pov_histories()
+  
 		if self.printInitial:
 			print("Initial board:")
 			print(self)
@@ -106,19 +112,79 @@ class Simulator(object):
 			self._handle_setting_mines(r)
 			self._handle_moving(r)
 			self._handle_healing(r)
+			self._record_pov_snapshots()
 			# TODO: something to do at the end of the round?
 			self.illustrator.append_goldpots(self._goldPots)
 			self.illustrator.append_robots(self._players)
 			self.illustrator.append_mines(getattr(self,'_mines',{}))
-
+			
 		print("=" * 80)
 		print("Final board:")
 		print(self)
+
 		if self.illustrator.vizfile:
 			self.illustrator._illustrate()
+   
+		if self.pov:
+			for i, data in self.pov_histories.items():
+				if len(data['maps']) == 0:
+					continue
 
+				filename = f"pov_player_{i}.gif"
+				pov_illustrator = PovIllustrator(
+					data['maps'],
+					data['positions'],
+					data['name'],
+     				data['goldpots'],
+					data['others'],
+					data['health'],
+					data['gold'],
+					filename,
+					self.illustrator.FRAME_PER_SECOND
+				)
+				pov_illustrator.illustrate()
+				
 
-	# relocate gold pot(s)
+	def _init_pov_histories(self):
+		if not self.pov:
+			return
+
+		for i, player in enumerate(self._players):
+			if hasattr(player, 'ourMap'):
+				self.pov_histories[i] = {
+					'name': getattr(player, 'player_name', f'player_{i}'),
+					'maps': [],
+					'positions': [],
+					'others': [],
+					'goldpots': [],
+					'health': [],
+					'gold': []
+				}
+    
+	def _record_pov_snapshots(self):
+		if not self.pov:
+			return
+
+		for i, player in enumerate(self._players):
+			if i not in self.pov_histories:
+				continue
+
+			self.pov_histories[i]['maps'].append(copy.deepcopy(player.ourMap))
+			self.pov_histories[i]['positions'].append((player.status.x, player.status.y))
+			self.pov_histories[i]['goldpots'].append(copy.deepcopy(self._goldPots))
+			self.pov_histories[i]['health'].append(player.status.health)
+			self.pov_histories[i]['gold'].append(player.status.gold)
+   
+			visible_others = []
+   
+			for other in player.status.others:
+				if other is not None:
+					visible_others.append((other.player, other.x, other.y))
+
+			self.pov_histories[i]['others'].append(visible_others)
+   
+		
+    # relocate gold pot(s)
 	def _empty_and_relocate_gold_pots(self):
 		for coord, amount in self._goldPots.items():
 			print("Gold pot at ({:>3}, {:>3}) with {} coints emtpied and relocated\n".
