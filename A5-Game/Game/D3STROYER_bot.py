@@ -6,7 +6,7 @@
 # ffmpeg -i viz.gif -vf "select=eq(n\,0)" -q:v 3 firstframe.png
 
 import math
-
+import copy
 from game_utils import Direction as D
 from game_utils import TileStatus
 from game_utils import Map
@@ -69,20 +69,24 @@ class D3STROYER(Player):
 
         # print(status.others, file=open("status_others.txt", "a"))
 
-        ## determine next move d based on shortest path finding
-        paths = AllShortestPaths(gLoc,self.ourMap)
+        # copy Map that our map dont get corrupted by opponent predictions
+        tempMap = copy.deepcopy(self.ourMap)
+
+        # determine next move d based on shortest path finding
+        paths = AllShortestPaths(gLoc,tempMap)
 
         # predict paths other players will take
         for other_status in status.others:
             if other_status is not None:
                 other_pos = other_status.x, other_status.y
                 other_path = paths.shortestPathFrom(other_pos)
-                # blacklist first n predicted path tiles
-                for tile in other_path[:3]:
-                    self.ourMap[tile].status = TileStatus.Wall
+                # estimate opponents gold to estimate how far they can move
+                affordable = self._affordable_moves(other_status.gold)
+                for tile in other_path[:affordable]:
+                    tempMap[tile].status = TileStatus.Wall
 
         # recompute paths after Map update to avoid other players
-        paths = AllShortestPaths(gLoc,self.ourMap)
+        paths = AllShortestPaths(gLoc,tempMap)
 
         bestpath = paths.shortestPathFrom(curpos)
 
@@ -98,14 +102,22 @@ class D3STROYER(Player):
             move_cost < status.gold // 4 and
             move_cost * 2 < status.goldPots[gLoc]):
             numMoves = distance // 2
-
-        # TODO: if low amount of gold in pot don't go for it
+            
         ## don't move if the pot is too far away
         if math.log2(distance) > status.goldPotRemainingRounds:
             numMoves = 0
 
-        return self._as_directions(curpos,bestpath[:numMoves])
+            return self._as_directions(curpos,bestpath[:numMoves])
 
+        # if low amount of gold in pot don't go for it
+        competitors = sum(1 for o in status.others if o is not None) + 1
+        share = status.goldPots[gLoc] / competitors
+        move_cost = D3STROYER._movement_cost(distance//2)
+        if share <= move_cost:
+             numMoves = 0
+        
+        return self._as_directions(curpos, bestpath[:numMoves])
+       
     def set_mines(self, status):
         """
         The player answers with a list of positions, where mines
