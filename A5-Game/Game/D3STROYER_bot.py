@@ -101,14 +101,22 @@ class D3STROYER(Player):
             move_cost < status.gold // 4 and
             move_cost * 2 < status.goldPots[gLoc]):
             numMoves = distance // 2
-
-        # TODO: if low amount of gold in pot don't go for it
+            
         ## don't move if the pot is too far away
         if math.log2(distance) > status.goldPotRemainingRounds:
             numMoves = 0
 
-        return self._as_directions(curpos,bestpath[:numMoves])
+            return self._as_directions(curpos,bestpath[:numMoves])
 
+        # if low amount of gold in pot don't go for it
+        competitors = sum(1 for o in status.others if o is not None) + 1
+        share = status.goldPots[gLoc] / competitors
+        move_cost = D3STROYER._movement_cost(distance//2)
+        if share <= move_cost:
+             numMoves = 0
+        
+        return self._as_directions(curpos, bestpath[:numMoves])
+       
     def set_mines(self, status):
         """
         The player answers with a list of positions, where mines
